@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Card Match</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+            background: #f0f3f9;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+
+        h1 {
+            margin-bottom: 20px;
+        }
+        .container {
+            max-width: 800px;
+            width: 100%;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 6px;
+        }
+        .card {
+            position: relative;
+            width: 100%;
+            padding-top: 100%; 
+            cursor: pointer;
+            perspective: 800px;
+        }
+        .card-inner {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            transition: transform 0.4s;
+            transform-style: preserve-3d;
+        }
+        .card-inner.flipped {
+            transform: rotateY(180deg);
+        }
+        .card-face {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            backface-visibility: hidden;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .card-front {
+            background: #ffffff;
+            border: 2px solid #e2e8f0;
+            transform: rotateY(180deg);
+        }
+
+        .card-back {
+            background: #4565b6;
+            color: #ffffff;
+            font-size: 2rem;
+        }
+
+        .card-inner.matched .card-front {
+            border-color: #22c55e;
+            background: #f0fdf4;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Card Match</h1>
+
+    <div class="container">
+        <!-- Card Grid -->
+        <div class="grid" id="grid"></div>
+    </div>
+
+    <script>
+        const cardImages = [
+            { name: "FIFA Cup",       file: "fifa_cup.png" },
+            { name: "FIFA",           file: "fifa.png" },
+            { name: "USA FC",         file: "usa_fc.png" },
+            { name: "Canada FC",      file: "canada_fc.png" },
+            { name: "Jersey 7",       file: "jersey_7.png" },
+            { name: "Jersey 10",      file: "jersey_10.png" },
+            { name: "Argentina Ball", file: "argentina_ball.png" },
+            { name: "Bicycle Kick",   file: "bicycle_kick.png" },
+            { name: "Golden Boot",    file: "golden_boot.png" },
+        ];
+
+        const gridContainer = document.getElementById("grid");
+        let allCards       = [];
+        let firstCardId    = null;
+        let secondCardId   = null;
+        let isLocked       = false;
+        let isPlaying      = false;
+        let cardIdCounter  = 0;
+
+        function shuffleArray(inputArray) {
+            // Copy so we don't change the original
+            const copy = [...inputArray];
+
+            // Randomly shuffling all cards array
+            for (let i = copy.length - 1; i > 0; i--) {
+                const randomIndex = Math.floor(Math.random() * (i + 1));
+                const temp        = copy[i];
+                copy[i]           = copy[randomIndex];
+                copy[randomIndex] = temp;
+            }
+
+            return copy;
+        }
+
+        function buildCardList() {
+            // Spread twice so every image appears exactly 2 times
+            const pairedImages = [...cardImages, ...cardImages];
+            const shuffled     = shuffleArray(pairedImages);
+
+            return shuffled.map(function(image) {
+                cardIdCounter = cardIdCounter + 1;
+                return {
+                    id:      cardIdCounter,
+                    name:    image.name,
+                    file:    image.file,
+                    matched: false,       // becomes true once the pair is found
+                };
+            });
+        }
+
+        function renderGrid() {
+            let html = "";
+
+            for (let i = 0; i < allCards.length; i++) {
+                const card = allCards[i];
+                html += `
+                    <div class="card" data-id="${card.id}">
+                        <div class="card-inner" data-id="${card.id}">
+                            <div class="card-face card-front">
+                                <img src="assets/${card.file}" alt="${card.name}" width="100%" height="100%">
+                            </div>
+                            <div class="card-face card-back">?</div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            gridContainer.innerHTML = html;
+        }
+
+        function updateCardVisuals() {
+            for (let i = 0; i < allCards.length; i++) {
+                const card      = allCards[i];
+                const cardInner = document.querySelector(`.card-inner[data-id="${card.id}"]`);
+
+                // Decide whether this card should be flipped (face-up)
+                const isFirstSelected  = card.id === firstCardId;
+                const isSecondSelected = card.id === secondCardId;
+                const isMatched        = card.matched;
+                const shouldBeFlipped  = isFirstSelected || isSecondSelected || isMatched;
+
+                // Add or remove the "flipped" class based on the decision above
+                if (shouldBeFlipped) {
+                    cardInner.classList.add("flipped");
+                } else {
+                    cardInner.classList.remove("flipped");
+                }
+
+                // Add or remove the "matched" class for the green border
+                if (isMatched) {
+                    cardInner.classList.add("matched");
+                } else {
+                    cardInner.classList.remove("matched");
+                }
+            }
+        }
+
+        function resetSelection() {
+            firstCardId  = null;
+            secondCardId = null;
+            isLocked     = false;
+        }
+
+        function checkAllMatched() {
+            for (let i = 0; i < allCards.length; i++) {
+                if (allCards[i].matched === false) {
+                    return false; // at least one card is still unmatched
+                }
+            }
+            return true; // every card is matched
+        }
+
+        function checkMatch() {
+            const firstCard  = allCards.find(function(c) { return c.id === firstCardId; });
+            const secondCard = allCards.find(function(c) { return c.id === secondCardId; });
+
+            const isMatch = firstCard.name === secondCard.name;
+
+            if (isMatch) {
+                // Mark both cards as matched
+                firstCard.matched  = true;
+                secondCard.matched = true;
+
+                // Short delay so the player can see them flip before we reset
+                setTimeout(function() {
+                    resetSelection();
+                    updateCardVisuals();
+
+                    // Check if the whole board is cleared
+                    if (checkAllMatched()) {
+                        isPlaying = false;
+                        alert("🎉 You matched all the cards! Well done!");
+                    }
+                }, 400);
+
+            } else {
+                // Not a match – flip both cards back after a short pause
+                setTimeout(function() {
+                    resetSelection();
+                    updateCardVisuals();
+                }, 800);
+            }
+        }
+
+        function handleCardClick(event) {
+            // Walk up the DOM to find the nearest .card element
+            const clickedCard = event.target.closest(".card");
+
+            // Ignore clicks outside a card, or while waiting
+            if (clickedCard === null) { return; }
+            if (isLocked === true)    { return; }
+            if (isPlaying === false)  { return; }
+
+            // Convert the data-id attribute from string to number
+            const clickedId = Number(clickedCard.dataset.id);
+
+            // Find the matching card object
+            const card = allCards.find(function(c) { return c.id === clickedId; });
+
+            // Ignore already-matched cards or a double-click on the same card
+            if (card.matched === true)     { return; }
+            if (card.id === firstCardId)   { return; }
+
+            if (firstCardId === null) {
+                // First card of the pair – just save it and flip it
+                firstCardId = card.id;
+                updateCardVisuals();
+            } else {
+                // Second card of the pair – lock the board, flip, then check
+                secondCardId = card.id;
+                isLocked     = true;
+                updateCardVisuals();
+                checkMatch();
+            }
+        }
+
+        function startGame() {
+            allCards  = buildCardList();
+            isPlaying = true;
+            resetSelection();
+            renderGrid();
+            updateCardVisuals();
+        }
+
+        document.addEventListener("click", handleCardClick);
+
+        // Start the game
+        window.addEventListener("load", startGame);
+    </script>
+</body>
+
+</html>
